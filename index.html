@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Be My Valentine - YES/NO Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="game-overlay" id="startScreen">
+            <div class="overlay-content">
+                <h1>Be My Valentine</h1>
+                <button class="start-button" id="startButton">Start Game</button>
+            </div>
+        </div>
+        
+        <div class="game-overlay hidden" id="gameOverScreen">
+            <div class="overlay-content">
+                <h2>I think you should try again 😉</h2>
+                <button class="start-button" id="restartButton">Play Again</button>
+            </div>
+        </div>
+        
+        <div class="game-overlay hidden" id="valentineScreen">
+            <div class="overlay-content valentine-content">
+                <h1 class="valentine-question">Will you be my valentine?</h1>
+                <div class="valentine-buttons">
+                    <button class="valentine-button yes-button" id="yesValentine">YES</button>
+                    <button class="valentine-button no-button" id="noValentine">NO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
