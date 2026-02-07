@@ -329,7 +329,10 @@ function showCelebration() {
     const buttonsEl = valentineScreen.querySelector('.valentine-buttons');
     questionEl.innerHTML = '💕 YAY! 💕 <br><br> Happy Valentine\'s Day! <br><br> ';
     buttonsEl.innerHTML = 
-        '<button class="start-button" id="playAgainButton">Play Again</button>';
+        '<div class="valentine-celebration">' +
+        '<img src="assets/valentine-celebration.png" alt="Celebration" class="valentine-celebration-img">' +
+        '<button class="start-button" id="playAgainButton">Play Again</button>' +
+        '</div>';
     
     // Add event listener for play again button
     document.getElementById('playAgainButton').addEventListener('click', () => {
