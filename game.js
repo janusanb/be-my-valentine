@@ -12,41 +12,94 @@ const MIN_DOT_SIZE = 15;
 const MAX_DOT_SIZE = 80;
 const INITIAL_DOT_COUNT = 20;
 const GROWTH_RATE = 0.3; // How much cursor grows per eaten dot (as fraction of eaten dot size)
+const TOUCH_SIZE_SCALE = 0.65; // Scale down dot/cursor sizes on touch-first devices
+
+// Runtime sizes (set in init from constants; smaller when touch-first)
+let minDotSize = MIN_DOT_SIZE;
+let maxDotSize = MAX_DOT_SIZE;
+let initialCursorSize = 30;
+let clickRadius = 5;
+let isTouchFirst = false;
 
 // Initialize game
 function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
     
+    // Use smaller targets on touch-first (coarse pointer) devices
+    isTouchFirst = window.matchMedia('(pointer: coarse)').matches;
+    if (isTouchFirst) {
+        minDotSize = Math.round(MIN_DOT_SIZE * TOUCH_SIZE_SCALE);
+        maxDotSize = Math.round(MAX_DOT_SIZE * TOUCH_SIZE_SCALE);
+        initialCursorSize = Math.round(30 * TOUCH_SIZE_SCALE);
+        clickRadius = Math.max(2, Math.round(5 * TOUCH_SIZE_SCALE));
+    }
+    
     // Set canvas size
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeCanvas);
+    }
     
-    // Mouse tracking
-    canvas.addEventListener('mousemove', (e) => {
+    // Helper: get canvas coordinates from mouse or touch event
+    function getEventCanvasCoords(e, useChangedTouches = false) {
         const rect = canvas.getBoundingClientRect();
-        mouseX = e.clientX - rect.left;
-        mouseY = e.clientY - rect.top;
+        const t = e.touches && (useChangedTouches ? e.changedTouches[0] : e.touches[0]);
+        if (t) {
+            return {
+                x: t.clientX - rect.left,
+                y: t.clientY - rect.top
+            };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    
+    // Mouse tracking (desktop)
+    canvas.addEventListener('mousemove', (e) => {
+        const coords = getEventCanvasCoords(e);
+        mouseX = coords.x;
+        mouseY = coords.y;
     });
     
-    // Canvas click handler for click-to-win feature
+    // Touch tracking (mobile): update position while finger moves
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 0) return;
+        const coords = getEventCanvasCoords(e);
+        mouseX = coords.x;
+        mouseY = coords.y;
+        if (gameRunning) e.preventDefault();
+    }, { passive: false });
+    
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 0) return;
+        const coords = getEventCanvasCoords(e);
+        mouseX = coords.x;
+        mouseY = coords.y;
+    }, { passive: true });
+    
+    // Canvas click/tap handler for click-to-win feature
     canvasClickHandler = (e) => {
-        if (!gameRunning) return; // Only handle clicks during gameplay
+        if (!gameRunning) return;
+        if (isTouchFirst) return; // Touch players must complete the game; no tap-to-win
         
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+        const coords = getEventCanvasCoords(e, e.type === 'touchend');
+        const clickX = coords.x;
+        const clickY = coords.y;
         
-        // Check if click is in empty space (not over a NO dot)
         if (!isClickOverNoDot(clickX, clickY)) {
-            // Click is in empty space - show celebration directly
             showCelebration();
         }
-        // If click is over a NO dot, do nothing (let game continue)
     };
     
-    // Add click listener (will be active during gameplay)
     canvas.addEventListener('click', canvasClickHandler);
+    
+    // Touch end (tap) for mobile: same as click, prevent default to avoid delay and double fire
+    canvas.addEventListener('touchend', (e) => {
+        if (!gameRunning || !e.changedTouches || e.changedTouches.length === 0) return;
+        e.preventDefault();
+        canvasClickHandler(e);
+    }, { passive: false });
     
     // Start button
     document.getElementById('startButton').addEventListener('click', startGame);
@@ -57,13 +110,15 @@ function init() {
 }
 
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    canvas.width = vw;
+    canvas.height = vh;
 }
 
 function startGame() {
     // Reset game state
-    cursorSize = 30;
+    cursorSize = initialCursorSize;
     gameRunning = true;
     noDots = [];
     
@@ -117,8 +172,6 @@ function isPositionSafe(x, y, size) {
 
 function isClickOverNoDot(x, y) {
     // Check if click position overlaps with any NO dots
-    // Use a small radius (like 5px) to check if click is directly on a dot
-    const clickRadius = 5;
     for (const dot of noDots) {
         const distance = Math.sqrt(
             Math.pow(x - dot.x, 2) + Math.pow(y - dot.y, 2)
@@ -191,17 +244,16 @@ function createNoDot(excludeCenter = false) {
         return {
             x: x,
             y: y,
-            size: MIN_DOT_SIZE + Math.random() * (MAX_DOT_SIZE - MIN_DOT_SIZE),
+            size: minDotSize + Math.random() * (maxDotSize - minDotSize),
             color: `hsl(${Math.random() * 60 + 320}, 70%, 60%)` // Pink/purple range
         };
     }
     
     // Fallback if we couldn't find a position outside exclusion zone
-    // This should rarely happen, but generate normally if it does
     return {
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        size: MIN_DOT_SIZE + Math.random() * (MAX_DOT_SIZE - MIN_DOT_SIZE),
+        size: minDotSize + Math.random() * (maxDotSize - minDotSize),
         color: `hsl(${Math.random() * 60 + 320}, 70%, 60%)` // Pink/purple range
     };
 }
@@ -356,9 +408,10 @@ function gameOver() {
 function drawBackgroundText() {
     ctx.save();
     
-    // Draw "Be Mine ❤️" text in the background
+    // Draw "Be Mine ❤️" text in the background; smaller on touch so it fits in the window
+    const bgFontSize = isTouchFirst ? Math.round(110 * TOUCH_SIZE_SCALE) : 120;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'; // Semi-transparent white
-    ctx.font = 'bold 120px Arial';
+    ctx.font = `bold ${bgFontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Be Mine ❤️', canvas.width / 2, canvas.height / 2);
